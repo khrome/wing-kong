@@ -1,0 +1,25 @@
+#!/usr/bin/env node
+const yargs = require('yargs/yargs');
+const { hideBin } = require('yargs/helpers');
+
+yargs(hideBin(process.argv))
+    .command('generate [mode]', 'create new importmap', (yargs) => {
+        return yargs.positional('mode', {
+            describe: 'generate modes',
+            default: 'dependencies'
+        })
+    }, (argv) => {
+        console.log(argv);
+    })
+    .option('output', {
+        alias: 'o',
+        type: 'string',
+        description: 'output to file'
+    })
+    .option('imports', {
+      alias: 'i',
+      type: 'string',
+      description: 'import endpoint map'
+    })
+    .help('help')
+  .parse();
