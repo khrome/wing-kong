@@ -1,17 +1,18 @@
 {
-    "name":"wing-kong",
-    "version":"0.0.1",
-    "main":"wing-kong.js",
-    "devDependencies":{
-        "chai":"^4.3.7",
-        "mocha":"^10.2.0"
+    "name": "wing-kong",
+    "version": "0.0.1",
+    "main": "wing-kong.js",
+    "devDependencies": {
+        "chai": "^4.3.7",
+        "mocha": "^10.2.0"
     },
-    "scripts":{
-        "lint":"./node_modules/.bin/eslint *.js src/*.js test/*.js",
-        "test":"./node_modules/.bin/mocha",
-        "container-test":"docker build . -t wing-kong -f ./containers/test.dockerfile; docker logs --follow \"$(docker run -d wing-kong)\""
+    "scripts": {
+        "lint": "./node_modules/.bin/eslint *.js src/*.js test/*.js",
+        "test": "./node_modules/.bin/mocha",
+        "container-test": "docker build . -t wing-kong -f ./containers/test.dockerfile; docker logs --follow \"$(docker run -d wing-kong)\""
     },
-    "dependencies":{
-        "yargs":"^17.7.2"
+    "dependencies": {
+        "es6-template-strings": "^2.0.1",
+        "yargs": "^17.7.2"
     }
 }

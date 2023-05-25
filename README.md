@@ -6,6 +6,7 @@ Because writing importmaps and maintaining them by hand when you're doing native
 This makes that simple, pulling dependencies, 
 
 Usage
+-----
 
 1) Add it to your project
 
@@ -39,18 +40,26 @@ Usage
     ```
     
 - When you generate `generate-public-importmap` it will use `unpkg` (falling back to `jsdeliver` then `local`). Because it doesn't use an import map, `generate-importmap` defaults to your local node_modules, assuming you are running a local server.
-- If you want to further automate, you could add it to your git hooks
+
+3) If you want to further automate: 
+
+- you could add it to your git hooks
 
     ```bash
         npm install simple-git-hooks
     ```
     
-    if [[ "$(git rev-parse --abbrev-ref HEAD)" == "gh-pages" ]]; then npm run generate-public-importmap; else npm run generate-importmap; fi
+- Then add a hook to regenerate these files on merge, so any deps changes come in and any cross branch merging gets normalized.
 
     ```json
         {
-            "scripts": {
+            "simple-git-hooks" : {
                 "post-merge" : " if [[ \"$(git rev-parse --abbrev-ref HEAD)\" == \"gh-pages\" ]]; then npm run generate-public-importmap; else npm run generate-importmap; fi"
             }
         }
     ```
+
+Testing
+-------
+
+TBD

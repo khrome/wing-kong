@@ -1,0 +1,5 @@
+{
+    "unpkg" : "https://unpkg.com/${name}${version}/",
+    "jsdeliver" : "https://cdn.jsdelivr.net/npm/${name}${version}/",
+    "local" : "./${name}"
+}
