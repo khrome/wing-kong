@@ -45,13 +45,12 @@ Usage
         npm install simple-git-hooks
     ```
     
-    if [[ "$(git rev-parse --abbrev-ref HEAD)" != "master" ]]; then npm run generate-public-importmap; else npm run generate-importmap; fi
+    if [[ "$(git rev-parse --abbrev-ref HEAD)" == "gh-pages" ]]; then npm run generate-public-importmap; else npm run generate-importmap; fi
 
     ```json
         {
             "scripts": {
-                "post-merge" : "./node_modules/wing-kong/bin/wing-kong -o ./importmap.json",
-                "generate-public-importmap" : "./node_modules/wing-kong/bin/wing-kong -o ./importmap.json -i import-endpoints.json"
+                "post-merge" : " if [[ \"$(git rev-parse --abbrev-ref HEAD)\" == \"gh-pages\" ]]; then npm run generate-public-importmap; else npm run generate-importmap; fi"
             }
         }
     ```
