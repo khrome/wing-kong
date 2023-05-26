@@ -1,12 +1,14 @@
 const https = require('https');
 const template = require('es6-template-strings');
 const path = require('path')
+const url = require('url')
 
 const getURL = async (url)=>{
     return await new Promise((resolve, reject)=>{
         const request = https.request(url, async (response) => {
             if(response.statusCode === 301 || response.statusCode === 302) {
-              return await getURL(response.headers.location);
+                const location = (new URL(response.headers.location, url)).toString();
+                resolve(await getURL(location));
             }
             let data = '';
             response.on('data', (chunk) => {
@@ -14,7 +16,7 @@ const getURL = async (url)=>{
             });
           
             response.on('end', () => {
-                const body = JSON.parse(data);
+                const body = data;
                 resolve(body);
             });
         })
@@ -36,11 +38,16 @@ const getURLFrom = async (opts, endpoints)=>{
     let body = null;
     const keys = Object.keys(endpoints);
     for(let lcv=0; lcv < keys.length; lcv++){
-        location = template(endpoints[keys[lcv]], options);
-        packageInfo = require(template('${name}/package.json', options));
-        console.log('**', packageInfo);
-        body = await getURL(location+packageInfo.main);
-        console.log('???', location);
+        if(!result){
+            location = template(endpoints[keys[lcv]], options);
+            packageInfo = require(template('${name}/package.json', options));
+            const entryLocation = path.join(
+                location,
+                (packageInfo.module || packageInfo.main || 'index.js')
+            );
+            body = await getURL(entryLocation);
+            if(body) result = entryLocation;
+        }
     }
     return result;
     
@@ -49,10 +56,11 @@ const getURLFrom = async (opts, endpoints)=>{
 
 module.exports = {
     createImportMap : async (deps, endpoints)=>{
-        console.log('>>', deps, endpoints)
-        return await Object.keys(deps).reduce(async (agg, key)=>{
-            agg[key] = getURLFrom(key, endpoints);
-            return agg;
-        }, {})
+        const keys = Object.keys(deps);
+        const keyMap = {};
+        for(let lcv=0; lcv < keys.length; lcv++){
+            keyMap[keys[lcv]] = await getURLFrom(keys[lcv], endpoints);
+        }
+        return keyMap;
     }
 }

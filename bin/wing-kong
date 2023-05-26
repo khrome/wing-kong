@@ -4,24 +4,25 @@ const { hideBin } = require('yargs/helpers');
 const packageData = require('../package.json')
 const { createImportMap } = require('../wing-kong.js');
 const path = require('path');
-console.log('FOO')
 yargs(hideBin(process.argv))
     .command('generate [mode]', 'create new importmap', (yargs) => {
         return yargs.positional('mode', {
             describe: 'generate modes',
             default: 'dependencies'
         })
-    }, (argv) => {
+    }, async (argv) => {
         const parts = argv.mode.split('+');
         let map = {};
         parts.forEach((part)=>{
             map = {...map, ...(packageData[part] || {})}
-        })
-        console.log('FOO2', map);
+        });
         const config = argv.i?require(path.join('..', argv.i)):{ "local" : "/node_modules/${name}/"};
-        const importMap = createImportMap(map, config);
-        console.log('', argv, importMap);
-        console.log('FOO3')
+        const importMap = await createImportMap(map, config);
+        if(argv.o){
+          
+        }else{
+            console.log(JSON.stringify(importMap, null, '    '));
+        }
     })
     .option('output', {
         alias: 'o',

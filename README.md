@@ -3,10 +3,10 @@ wing-kong imports
 
 Because writing importmaps and maintaining them by hand when you're doing native module development is pointless and infuriating, and the use case for this is super basic: You want to deliver from one or more CDNs on a site that allows file hosting via URL, but does not allow dependency insallation (ex: [gh-pages]()) and another which you want to be locally hosted (like a browser test suite).
 
-This makes that simple, pulling dependencies, 
+This makes that simple, pulling dependencies, then rendering urls based on the file entry point and passed configuration.
 
-Usage
------
+**Waltz in and out like the wind.** (Usage)
+-------------------------------------------
 
 1) Add it to your project
 
@@ -14,7 +14,6 @@ Usage
     ```bash
         npm install wing-kong
     ```
-- test
 
 2) Add the generator to your scripts:
 
@@ -59,7 +58,7 @@ Usage
         }
     ```
 
-Testing
--------
+**As two... I said I was coming** (Testing)
+-------------------------------------------
 
 TBD
