@@ -42,7 +42,7 @@ This makes that simple: pulling dependencies, then rendering urls based on the f
 
 3) If you want to further automate: 
 
-- you could add it to your git hooks
+- you could add it to your [git hooks](https://github.com/toplenboren/simple-git-hooks/)
 
     ```bash
         npm install simple-git-hooks
