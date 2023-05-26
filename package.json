@@ -4,6 +4,7 @@
     "main": "wing-kong.js",
     "devDependencies": {
         "chai": "^4.3.7",
+        "intercept-stdout": "^0.1.2",
         "mocha": "^10.2.0"
     },
     "scripts": {
