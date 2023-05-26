@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const yargs = require('yargs/yargs');
+const fs = require('fs');
 const { hideBin } = require('yargs/helpers');
 const packageData = require('../package.json')
 const { createImportMap } = require('../wing-kong.js');
@@ -18,14 +19,17 @@ yargs(hideBin(process.argv))
         });
         const config = argv.i?require(path.join('..', argv.i)):{ "local" : "/node_modules/${name}/"};
         const importMap = await createImportMap(map, config);
-        if(argv.o){
-          
+        const result = JSON.stringify(importMap, null, '    ');
+        if(argv.f){
+          fs.writeFile(argv.f, result, {}, ()=>{
+              console.log(`File "${argv.f}" written.`);
+          });
         }else{
-            console.log(JSON.stringify(importMap, null, '    '));
+            console.log(result);
         }
     })
-    .option('output', {
-        alias: 'o',
+    .option('file', {
+        alias: 'f',
         type: 'string',
         description: 'output to file'
     })
