@@ -1,7 +1,8 @@
 const https = require('https');
 const template = require('es6-template-strings');
 const path = require('path')
-const url = require('url')
+const url = require('url');
+const fs = require('fs');
 
 const getURL = async (url)=>{
     return await new Promise((resolve, reject)=>{
@@ -45,8 +46,7 @@ const getURLFrom = async (opts, endpoints)=>{
                 location,
                 (packageInfo.module || packageInfo.main || 'index.js')
             );
-            body = await getURL(entryLocation);
-            if(body) result = entryLocation;
+            result = entryLocation;
         }
     }
     return result;
@@ -62,5 +62,34 @@ module.exports = {
             keyMap[keys[lcv]] = await getURLFrom(keys[lcv], endpoints);
         }
         return keyMap;
+    },
+    
+    createImportMapForPackage : async (packageLocation, parts=['dependencies'], imports)=>{
+        const packageData = require(packageLocation);
+        let map = {};
+        parts.forEach((part)=>{
+            map = {...map, ...(packageData[part] || {})}
+        });
+        const config = imports?require(path.join('..', imports)):{ "local" : "/node_modules/${name}/"};
+        return module.exports.createImportMap(map, config);
+    },
+    
+    rewriteHTML : async (filename, package, flushToFile)=>{
+        const body = (await fs.promises.readFile(filename)).toString();
+        const matches = body.match(
+            /< *[Ss][Cc][Rr][Ii][Pp][Tt] +[Tt][Yy][Pp][Ee] *= *["']importmap["'](.|\n)*?<\/[Ss][Cc][Rr][Ii][Pp][Tt]>/m
+        );
+        if(matches && matches[0]){
+            const map = await module.exports.createImportMapForPackage(package);
+            const result = body.replace(matches[0], (`<script type="importmap">
+    {
+        "imports": ${JSON.stringify(map, null, '    ').replace(/\n/g, "\n        ")}
+    }
+</script>`).replace(/\n/g, "\n    "));
+            if(flushToFile){
+                fs.promises.writeFile(filename, result);
+            }
+            return result;
+        }
     }
 }

@@ -3,7 +3,7 @@ const yargs = require('yargs/yargs');
 const fs = require('fs');
 const { hideBin } = require('yargs/helpers');
 const packageData = require('../package.json')
-const { createImportMap } = require('../wing-kong.js');
+const { createImportMapForPackage, rewriteHTML } = require('../wing-kong.js');
 const path = require('path');
 yargs(hideBin(process.argv))
     .command('generate [mode]', 'create new importmap', (yargs) => {
@@ -13,12 +13,8 @@ yargs(hideBin(process.argv))
         })
     }, async (argv) => {
         const parts = argv.mode.split('+');
-        let map = {};
-        parts.forEach((part)=>{
-            map = {...map, ...(packageData[part] || {})}
-        });
-        const config = argv.i?require(path.join('..', argv.i)):{ "local" : "/node_modules/${name}/"};
-        const importMap = await createImportMap(map, config);
+        const rootJSONLocation = require.resolve(path.join(process.cwd(), 'package.json'));
+        const importMap = await createImportMapForPackage(rootJSONLocation, parts, argv.i);
         const result = JSON.stringify(importMap, null, '    ');
         if(argv.f){
           fs.writeFile(argv.f, result, {}, ()=>{
@@ -27,6 +23,18 @@ yargs(hideBin(process.argv))
         }else{
             console.log(result);
         }
+    })
+    .command('rewrite [mode] [file]', 'rewrite importmap script tag', (yargs) => {
+        return yargs.positional('mode', {
+            describe: 'generate modes',
+            default: 'dependencies'
+        }).positional('file', {
+            describe: 'file to rewrite',
+            default: 'package.json'
+        });
+    }, async (argv) => {
+        const rootJSONLocation = require.resolve(path.join(process.cwd(), 'package.json'));
+        await rewriteHTML(argv.file, rootJSONLocation, true);
     })
     .option('file', {
         alias: 'f',
