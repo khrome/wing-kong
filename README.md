@@ -22,9 +22,8 @@ This makes that simple: pulling dependencies, then rendering importmaps based on
     ```json
         {
             "scripts": {
-                "replace-importmap-in-html" : "./node_modules/.bin/wing-kong -o ./index.html",
-                "generate-importmap" : "./node_modules/.bin/wing-kong -o ./importmap.json",
-                "generate-public-importmap" : "./node_modules/.bin/wing-kong -o ./importmap.json -i import-endpoints.json"
+                "regenerate-test-importmap" : "wing-kong -i .import-config.json -f ./test/test.html rewrite dependencies",
+                "generate-importmap" : "wing-kong -i .import-config.json generate dependencies"
             }
         }
     ```
@@ -34,7 +33,7 @@ This makes that simple: pulling dependencies, then rendering importmaps based on
     ```json
         {
             "unpkg" : "https://unpkg.com/${name}${version}/",
-            "jsdeliver" : "https://cdn.jsdelivr.net/npm/${name}${version}/"
+            "jsdeliver" : "https://cdn.jsdelivr.net/npm/${name}${version}/",
             "local" : "./${name}"
         }
     ```

@@ -85,6 +85,23 @@ export const createImportMapForPackage = async (packageLocation, parts=['depende
     return createImportMap(map, config);
 };
 
+export const replaceImportMap = async (html, incoming)=>{
+    const mapStr = typeof incoming === 'string'?incoming:JSON.stringify(incoming);
+    const matches = html.match(
+        /< *[Ss][Cc][Rr][Ii][Pp][Tt] +[Tt][Yy][Pp][Ee] *= *["']importmap["'](.|\n)*?<\/[Ss][Cc][Rr][Ii][Pp][Tt]>/m
+    );
+    if(matches && matches[0]){
+        const result = html.replace(matches[0], (`<script type="importmap">
+{
+    "imports": ${mapStr.replace(/\n/g, '\n        ')}
+}
+</script>`).replace(/\n/g, '\n    '));
+        return result;
+    }else{
+        return html;
+    }
+};
+
 export const rewriteHTML = async (filename, pkg, flushToFile)=>{
     const body = (await fs.promises.readFile(filename)).toString();
     const matches = body.match(

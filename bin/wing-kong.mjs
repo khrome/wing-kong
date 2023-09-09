@@ -44,8 +44,9 @@ const yargs = internalRequire( 'yargs/yargs');
                 default: 'package.json'
             });
         }, async (argv) => {
-            /*const rootJSONLocation = require.resolve(path.join(process.cwd(), 'package.json'));
-            await rewriteHTML(argv.file, rootJSONLocation, true);*/
+            const rootJSONLocation = internalRequire.resolve(path.join(process.cwd(), 'package.json'));
+            await rewriteHTML(argv.file, rootJSONLocation, true);
+            //console.log('{}');
         })
         .option('file', {
             alias: 'f',
