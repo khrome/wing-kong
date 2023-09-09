@@ -1,22 +1,34 @@
-const should = require('chai').should();
-const interceptStdOut = require("intercept-stdout");
-const { spawn } = require('node:child_process');
-const { rewriteHTML } = require('../wing-kong.js');
-const path = require('path');
+/* global describe:false */
+import { chai } from '@environment-safe/chai';
+import { it } from '@open-automaton/moka';
+import { intercept } from '@environment-safe/console-intercept'; 
+import { scanPackage, rewriteHTML } from '../src/index.mjs';
+const should = chai.should();
+import { spawn } from 'node:child_process';
+import * as path from 'node:path';
+import * as url from 'url';
+import * as mod from 'module';
+let internalRequire = null;
+if(typeof require !== 'undefined') internalRequire = require;
+const ensureRequire = ()=> (!internalRequire) && (internalRequire = mod.createRequire(import.meta.url));
+
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const resolvedDepsJSONString = `{
-            "imports": {
+        "imports": {
+                "@environment-safe/chai": "/node_modules/@environment-safe/chai/src/index.mjs",
+                "@environment-safe/console-intercept": "/node_modules/@environment-safe/console-intercept/index.js",
+                "@environment-safe/package": "/node_modules/@environment-safe/package/index.js",
+                "@open-automaton/moka": "/node_modules/@open-automaton/moka/index.js",
                 "es6-template-strings": "/node_modules/es6-template-strings/index.js",
-                "yargs": "/node_modules/yargs/index.mjs"
-            }
-        }`;
+                "yargs": "/node_modules/yargs/index.mjs"`;
 
 const executeCommand = async (command)=>{
     return new Promise((resolve, reject)=>{
         const cmd = command.shift();
         const ls = spawn(cmd, command);
         
-        const err = null;
+        let err = null;
         let result = '';
         
         ls.stdout.on('data', (data) => {
@@ -46,13 +58,14 @@ describe('wing-kong', ()=>{
             let data = null;
             try{
                 const result = await executeCommand([
-                    "./bin/wing-kong", 
+                    "./bin/wing-kong.mjs", 
                     "-i", 
                     "./test/demo/test.json", 
                     "generate", 
                     "dependencies"
                 ]);
                 try{
+                    should.exist(result);
                     data = JSON.parse(result);
                 }catch(ex){
                     should.not.exist(ex, 'could not parse the returned JSON');
@@ -69,9 +82,10 @@ describe('wing-kong', ()=>{
         
         it('substitutes in html', async ()=>{
             try{
+               ensureRequire();
                 const html = await rewriteHTML(
                     path.join(__dirname, 'test.html'), 
-                    require.resolve('../package.json')
+                    internalRequire.resolve('../package.json')
                 );
                 html.should.contain(resolvedDepsJSONString);
             }catch(ex){
@@ -79,5 +93,7 @@ describe('wing-kong', ()=>{
                 should.not.exist(ex);
             }
         });
+        
+        
     });
 });

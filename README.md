@@ -3,7 +3,7 @@ wing-kong imports
 
 Because writing importmaps and maintaining them by hand when you're doing native module development is pointless and infuriating, and the use case for this is super basic: You want to deliver from one or more CDNs on a site that allows file hosting via URL, but does not allow dependency insallation (ex: [gh-pages](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site)) and another which you want to be locally hosted (like a browser test suite or a static local dev server).
 
-This makes that simple: pulling dependencies, then rendering urls based on the file entry point and passed configuration.
+This makes that simple: pulling dependencies, then rendering importmaps based on your configuration. The basic profile & generate runs client + server, though the CL tools only run server side.
 
 **Waltz in and out like the wind.** (Usage)
 -------------------------------------------
@@ -12,7 +12,7 @@ This makes that simple: pulling dependencies, then rendering urls based on the f
 
 - install with npm 
     ```bash
-        npm install wing-kong
+        npm i wing-kong
     ```
 
 2) Add the generator to your scripts:
@@ -22,8 +22,9 @@ This makes that simple: pulling dependencies, then rendering urls based on the f
     ```json
         {
             "scripts": {
-                "generate-importmap" : "./node_modules/wing-kong/bin/wing-kong -o ./importmap.json",
-                "generate-public-importmap" : "./node_modules/wing-kong/bin/wing-kong -o ./importmap.json -i import-endpoints.json"
+                "replace-importmap-in-html" : "./node_modules/.bin/wing-kong -o ./index.html",
+                "generate-importmap" : "./node_modules/.bin/wing-kong -o ./importmap.json",
+                "generate-public-importmap" : "./node_modules/.bin/wing-kong -o ./importmap.json -i import-endpoints.json"
             }
         }
     ```

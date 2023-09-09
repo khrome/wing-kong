@@ -1,18 +1,49 @@
 {
     "name": "wing-kong",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "main": "wing-kong.js",
     "devDependencies": {
+        "@babel/cli": "^7.22.15",
+        "@babel/core": "^7.22.17",
+        "@babel/plugin-transform-modules-commonjs": "^7.22.15",
+        "babel-plugin-search-and-replace": "^1.1.1",
         "chai": "^4.3.7",
+        "husky": "^8.0.3",
         "intercept-stdout": "^0.1.2",
+        "jsdoc": "^4.0.2",
+        "jsdoc-to-markdown": "^8.0.0",
+        "jslint": "^0.12.1",
         "mocha": "^10.2.0"
+    },
+    "bin": {
+        "wing-kong": "./bin/wing-kong.mjs"
     },
     "scripts": {
         "lint": "./node_modules/.bin/eslint *.js src/*.js test/*.js",
-        "test": "./node_modules/.bin/mocha",
-        "container-test": "docker build . -t wing-kong -f ./containers/test.dockerfile; docker logs --follow \"$(docker run -d wing-kong)\""
+        "test-bin": "./node_modules/.bin/mocha test/test-bin.mjs",
+        "bin": "./bin/wing-kong.mjs",
+        "build-commonjs": "./node_modules/.bin/babel src --out-dir dist --out-file-extension .cjs",
+        "build-commonjs-test": "./node_modules/.bin/babel test --out-dir test --out-file-extension .cjs",
+        "import-test": "./node_modules/.bin/mocha test/test.mjs",
+        "require-test": "./node_modules/.bin/mocha test/test.cjs",
+        "local-server": "open 'http://localhost:8085/' ; npx http-server -p 8085",
+        "headless-browser-test": "npm run headless-chrome-test; npm run headless-firefox-test; npm run headless-safari-test",
+        "headless-chrome-test": "./bin/moka.mjs --server . --browser chrome --relaxed --prefix ../ test/test.mjs",
+        "headless-firefox-test": "./bin/moka.mjs --server . --browser firefox --relaxed --prefix ../ test/test.mjs",
+        "headless-safari-test": "./bin/moka.mjs --server . --browser safari --relaxed --prefix ../ test/test.mjs",
+        "browser-test": "./bin/moka.mjs --server . --local-browser --relaxed --prefix ../ test/test.mjs",
+        "container-test": "docker build . -t wing-kong -f ./containers/test.dockerfile; docker logs --follow \"$(docker run -d wing-kong)\"",
+        "generate-docs": "for i in src/*.mjs; do echo \"generating docs for: ${i}\";./node_modules/.bin/jsdoc2md -c .jsdoc.json \"${i}\" > \"docs/$(basename ${i%.mjs}).md\"; done",
+        "generate-types": "for i in src/*.mjs; do echo \"generating types for: ${i}\"; ./node_modules/.bin/jsdoc -t node_modules/tsd-jsdoc/dist -c .jsdoc.json \"${i}\"; mv out/types.d.ts \"src/$(basename ${i%.mjs}).d.ts\"; done; rmdir out",
+        "add-generated-files-to-commit": "git add docs/*.md; git add src/*.d.ts; git add dist/*.cjs",
+        "prepare": "husky install"
     },
     "dependencies": {
+        "@environment-safe/chai": "^0.2.0",
+        "@environment-safe/console-intercept": "^0.1.0",
+        "@environment-safe/package": "^0.2.0",
+        "@open-automaton/moka": "^0.0.4",
+        "babel-plugin-transform-import-meta": "^2.2.1",
         "es6-template-strings": "^2.0.1",
         "yargs": "^17.7.2"
     }
