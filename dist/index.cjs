@@ -3,7 +3,7 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.scanPackage = exports.rewriteHTML = exports.createImportMapForPackage = exports.createImportMap = void 0;
+exports.scanPackage = exports.rewriteHTML = exports.registerRequire = exports.registerRemote = exports.mochaEventHandler = exports.createImportMapForPackage = exports.createImportMap = void 0;
 var mod = _interopRequireWildcard(require("node:module"));
 var fs = _interopRequireWildcard(require("node:fs"));
 var _nodePath = _interopRequireDefault(require("node:path"));
@@ -29,7 +29,6 @@ const getURLFrom = async (opts, endpoints) => {
   let result = null;
   let location = null;
   let packageInfo = null;
-  let body = null;
   let thisPath = null;
   const keys = Object.keys(endpoints);
   for (let lcv = 0; lcv < keys.length; lcv++) {
@@ -41,7 +40,7 @@ const getURLFrom = async (opts, endpoints) => {
         packageInfo = internalRequire(thisPath);
       } catch (ex) {
         packageInfo = {
-          foo: "bar"
+          foo: 'bar'
         };
       }
       const entryLocation = _nodePath.default.join(location, packageInfo.module || packageInfo.main || 'index.js');
@@ -75,7 +74,7 @@ const createImportMapForPackage = async (packageLocation, parts = ['dependencies
   });*/
   //ensureRequire();
   const config = imports ? internalRequire(_nodePath.default.join('..', imports)) : {
-    "local": "/node_modules/${name}/"
+    'local': '/node_modules/${name}/'
   };
   return createImportMap(map, config);
 };
@@ -87,9 +86,9 @@ const rewriteHTML = async (filename, pkg, flushToFile) => {
     const map = await createImportMapForPackage(pkg);
     const result = body.replace(matches[0], `<script type="importmap">
 {
-    "imports": ${JSON.stringify(map, null, '    ').replace(/\n/g, "\n        ")}
+    "imports": ${JSON.stringify(map, null, '    ').replace(/\n/g, '\n        ')}
 }
-</script>`.replace(/\n/g, "\n    "));
+</script>`.replace(/\n/g, '\n    '));
     if (flushToFile) {
       fs.promises.writeFile(filename, result);
     }
@@ -97,10 +96,64 @@ const rewriteHTML = async (filename, pkg, flushToFile) => {
   }
 };
 exports.rewriteHTML = rewriteHTML;
+let waiting = {};
+let remoteRequire = null;
+const remotes = {};
+const engines = {};
+const registerRequire = (rqr, rslv) => {
+  //require = rqr;
+  //resolve = rslv;
+};
+//*
+exports.registerRequire = registerRequire;
+const registerRemote = (name, engineName, options = {}) => {
+  if (!remoteRequire) remoteRequire = mod.createRequire(require('url').pathToFileURL(__filename).toString());
+  if (!engines[engineName]) engines[engineName] = remoteRequire(engineName);
+  const instance = new engines[engineName](options);
+  remotes[name] = instance;
+}; //*/
+exports.registerRemote = registerRemote;
+const mochaEventHandler = (type, event) => {
+  try {
+    if (type.message && type.stack) {
+      //it's an error
+    } else {
+      switch (type) {
+        case 'pass':
+          if (waiting[event.title]) {
+            const handle = waiting[event.title];
+            delete waiting[event.title];
+            handle.resolve();
+          } else {
+            console.log('unknown event', type, event);
+          }
+          break;
+        case 'fail':
+          if (waiting[event.title]) {
+            const handle = waiting[event.title];
+            delete waiting[event.title];
+            const error = new Error();
+            error.message = event.err;
+            error.stack = event.stack;
+            error.target = event;
+            handle.reject(error);
+          } else {
+            console.log('unknown event', type, event);
+          }
+          break;
+        case 'start':
+        case 'end':
+      }
+    }
+  } catch (ex) {
+    console.log('::', ex);
+  }
+};
+exports.mochaEventHandler = mochaEventHandler;
 const scanPackage = async (options = {}) => {
   const includeRemotes = options.includeRemotes;
-  const includeDeps = options.includeDeps;
-  if (includeDeps === null) includeDeps = true;
+  let includeDeps = options.includeDeps;
+  if (includeDeps === null || includeDeps === undefined) includeDeps = true;
   const pkg = await (0, _package.getPackage)(options.package);
   const config = pkg.moka || options.config || {};
   if (!pkg) throw new Error('could not load ' + _nodePath.default.join(process.cwd(), 'package.json'));

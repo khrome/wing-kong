@@ -1,4 +1,4 @@
-/* global describe:false, it:false */
+/* global describe:false */
 import { chai } from '@environment-safe/chai';
 import { it } from '@open-automaton/moka';
 import { scanPackage } from '../src/index.mjs';
@@ -9,9 +9,9 @@ describe('wing-kong', ()=>{
     describe('can test itself', ()=>{
         it('generates an importmap', async ()=>{
             const pkg = await scanPackage();
-            Object.keys(pkg.modules).length.should.equal(403)
+            Object.keys(pkg.modules).length.should.equal(496);
             someDeps.forEach((dep)=>{
-               should.exist(pkg.modules[dep]);
+                should.exist(pkg.modules[dep]);
             });
         });
     });

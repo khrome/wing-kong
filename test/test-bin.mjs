@@ -1,8 +1,8 @@
 /* global describe:false */
 import { chai } from '@environment-safe/chai';
 import { it } from '@open-automaton/moka';
-import { intercept } from '@environment-safe/console-intercept'; 
-import { scanPackage, rewriteHTML } from '../src/index.mjs';
+//import { intercept } from '@environment-safe/console-intercept'; 
+import { rewriteHTML } from '../src/index.mjs';
 const should = chai.should();
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
@@ -14,12 +14,12 @@ const ensureRequire = ()=> (!internalRequire) && (internalRequire = mod.createRe
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
-const resolvedDepsJSONString = `{
-        "imports": {
+const resolvedDepsJSONString = `
                 "@environment-safe/chai": "/node_modules/@environment-safe/chai/src/index.mjs",
                 "@environment-safe/console-intercept": "/node_modules/@environment-safe/console-intercept/index.js",
-                "@environment-safe/package": "/node_modules/@environment-safe/package/index.js",
+                "@environment-safe/package": "/node_modules/@environment-safe/package/src/index.mjs",
                 "@open-automaton/moka": "/node_modules/@open-automaton/moka/index.js",
+                "babel-plugin-transform-import-meta": "/node_modules/babel-plugin-transform-import-meta/index.js",
                 "es6-template-strings": "/node_modules/es6-template-strings/index.js",
                 "yargs": "/node_modules/yargs/index.mjs"`;
 
@@ -32,7 +32,7 @@ const executeCommand = async (command)=>{
         let result = '';
         
         ls.stdout.on('data', (data) => {
-            result += data
+            result += data;
         });
         
         ls.stderr.on('data', (data) => {
@@ -50,19 +50,19 @@ const executeCommand = async (command)=>{
             }
         }); 
     });
-}
+};
 
 describe('wing-kong', ()=>{
-   describe('performs a simple test suite', ()=>{
+    describe('performs a simple test suite', ()=>{
         it('works as expected', async ()=>{
             let data = null;
             try{
                 const result = await executeCommand([
-                    "./bin/wing-kong.mjs", 
-                    "-i", 
-                    "./test/demo/test.json", 
-                    "generate", 
-                    "dependencies"
+                    './bin/wing-kong.mjs', 
+                    '-i', 
+                    './test/demo/test.json', 
+                    'generate', 
+                    'dependencies'
                 ]);
                 try{
                     should.exist(result);
@@ -75,14 +75,14 @@ describe('wing-kong', ()=>{
                 should.not.exist(ex);
             }
             should.exist(data['es6-template-strings']);
-            data['es6-template-strings'].should.equal("https:/unpkg.com/es6-template-strings/index.js");
+            data['es6-template-strings'].should.equal('https:/unpkg.com/es6-template-strings/index.js');
             should.exist(data['yargs']);
-            data['yargs'].should.equal("https:/unpkg.com/yargs/index.mjs");
+            data['yargs'].should.equal('https:/unpkg.com/yargs/index.mjs');
         });
         
         it('substitutes in html', async ()=>{
             try{
-               ensureRequire();
+                ensureRequire();
                 const html = await rewriteHTML(
                     path.join(__dirname, 'test.html'), 
                     internalRequire.resolve('../package.json')

@@ -37,8 +37,7 @@ const getURLFrom = async (opts, endpoints)=>{
     let result = null;
     let location = null;
     let packageInfo = null;
-    let body = null;
-    let thisPath = null
+    let thisPath = null;
     const keys = Object.keys(endpoints);
     for(let lcv=0; lcv < keys.length; lcv++){
         if(!result){
@@ -48,7 +47,7 @@ const getURLFrom = async (opts, endpoints)=>{
             try{
                 packageInfo = internalRequire(thisPath);
             }catch(ex){
-                packageInfo = { foo: "bar" };
+                packageInfo = { foo: 'bar' };
             }
             const entryLocation = path.join(
                 location,
@@ -82,9 +81,9 @@ export const createImportMapForPackage = async (packageLocation, parts=['depende
         map = {...map, ...(packageData[part] || {})}
     });*/
     //ensureRequire();
-    const config = imports?internalRequire(path.join('..', imports)):{ "local" : "/node_modules/${name}/"};
+    const config = imports?internalRequire(path.join('..', imports)):{ 'local' : '/node_modules/${name}/'};
     return createImportMap(map, config);
-}
+};
 
 export const rewriteHTML = async (filename, pkg, flushToFile)=>{
     const body = (await fs.promises.readFile(filename)).toString();
@@ -95,20 +94,75 @@ export const rewriteHTML = async (filename, pkg, flushToFile)=>{
         const map = await createImportMapForPackage(pkg);
         const result = body.replace(matches[0], (`<script type="importmap">
 {
-    "imports": ${JSON.stringify(map, null, '    ').replace(/\n/g, "\n        ")}
+    "imports": ${JSON.stringify(map, null, '    ').replace(/\n/g, '\n        ')}
 }
-</script>`).replace(/\n/g, "\n    "));
+</script>`).replace(/\n/g, '\n    '));
         if(flushToFile){
             fs.promises.writeFile(filename, result);
         }
         return result;
     }
-}
+};
+let waiting = {};
+
+let remoteRequire = null;
+
+const remotes = {};
+const engines = {};
+
+export const registerRequire = (rqr, rslv)=>{
+    //require = rqr;
+    //resolve = rslv;
+};
+//*
+export const registerRemote = (name, engineName, options={})=>{
+    if(!remoteRequire) remoteRequire = mod.createRequire(import.meta.url);
+    if(!engines[engineName]) engines[engineName] = remoteRequire(engineName);
+    const instance = new engines[engineName](options);
+    remotes[name] = instance;
+}; //*/
+
+export const mochaEventHandler = (type, event)=>{
+    try{
+        if(type.message && type.stack){
+            //it's an error
+        }else{
+            switch(type){
+                case 'pass':
+                    if(waiting[event.title]){
+                        const handle = waiting[event.title];
+                        delete waiting[event.title];
+                        handle.resolve();
+                    }else{
+                        console.log('unknown event', type, event);
+                    }
+                    break;
+                case 'fail':
+                    if(waiting[event.title]){
+                        const handle = waiting[event.title];
+                        delete waiting[event.title];
+                        const error = new Error();
+                        error.message = event.err;
+                        error.stack = event.stack;
+                        error.target = event;
+                        handle.reject(error);
+                    }else{
+                        console.log('unknown event', type, event);
+                    }
+                    break;
+                case 'start':
+                case 'end':
+            }
+        }
+    }catch(ex){
+        console.log('::', ex);
+    }
+};
 
 export const scanPackage = async(options={})=>{
     const includeRemotes = options.includeRemotes;
-    const includeDeps = options.includeDeps;
-    if(includeDeps === null) includeDeps = true;
+    let includeDeps = options.includeDeps;
+    if(includeDeps === null || includeDeps === undefined) includeDeps = true;
     const pkg = await getPackage(options.package);
     const config = pkg.moka || options.config || {};
     if(!pkg) throw new Error('could not load '+path.join(process.cwd(), 'package.json'));
@@ -118,7 +172,7 @@ export const scanPackage = async(options={})=>{
     const mains = {};
     const modules = {};
     const locations = {};
-    if(!options.prefix) options.prefix = './'
+    if(!options.prefix) options.prefix = './';
     const list = dependencies.slice(0).concat(devDependencies.slice(0));
     let moduleName = null;
     let subpkg = null;
