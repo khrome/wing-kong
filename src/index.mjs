@@ -1,91 +1,313 @@
+import { isBrowser, isJsDom } from 'browser-or-node';
 import * as mod from 'node:module';
 import * as fs from 'node:fs';
-import path from 'node:path';
-import { getPackage } from '@environment-safe/package';
-import template from 'es6-template-strings';
+import { traverse, errors } from '@open-automaton/traverse-dependencies';
+import { Template } from '@environment-safe/tag-parser/template';
+import { Logger } from '@environment-safe/logger';
+const template = (template, context)=>{
+    const temp = new Template(template);
+    return temp.render(context);
+};
 let internalRequire = null;
 if(typeof require !== 'undefined') internalRequire = require;
 const ensureRequire = ()=> (!internalRequire) && (internalRequire = mod.createRequire(import.meta.url));
 
-const getCommonJS = (pkg, args, options={})=>{
-    return options.prefix + ['node_modules', pkg.name, (
-        (pkg.exports && pkg.exports['.'] && pkg.exports['.'].require)?
-            pkg.exports['.'].require:
-            ((
-                (pkg.type === 'commonjs' || !pkg.type)  && 
-                (pkg.commonjs  || pkg.main) 
-            ) || pkg.commonjs || (args.r && pkg.main))
-    )].join('/');
-};
+let waiting = {};
+let remoteRequire = null;
+const remotes = {};
+const engines = {};
 
-const getModule = (pkg, args, options={})=>{
-    return options.prefix + ['node_modules', pkg.name, (
-        (pkg.exports && pkg.exports['.'] && pkg.exports['.'].import)?
-            pkg.exports['.'].import:
-            ((
-                pkg.type === 'module' && 
-                (pkg.module  || pkg.main) 
-            ) || pkg.module || (args.r && pkg.main))
-    )].join('/');
+export const registerRemote = (name, engineName, options={})=>{
+    if(!remoteRequire) remoteRequire = mod.createRequire(import.meta.url);
+    if(!engines[engineName]) engines[engineName] = remoteRequire(engineName);
+    const instance = new engines[engineName](options);
+    remotes[name] = instance;
 };
 
 
 
-const getURLFrom = async (opts, endpoints)=>{
-    const options = typeof opts === 'string'?{ name : opts }:opts;
-    if(!options.version) options.version = '';
-    let result = null;
-    let location = null;
-    let packageInfo = null;
-    let thisPath = null;
-    const keys = Object.keys(endpoints);
-    for(let lcv=0; lcv < keys.length; lcv++){
-        if(!result){
-            ensureRequire();
-            location = template(endpoints[keys[lcv]], options);
-            thisPath = template('${name}/package.json', options);
-            try{
-                packageInfo = internalRequire(thisPath);
-            }catch(ex){
-                packageInfo = { foo: 'bar' };
+//TODO: make the pathing windows friendly (there are places where file path and web locations are crossed)
+const notRelative = (str)=>{
+    if(str && str[0] === '.' && str[1] === '/'){
+        return str.substring(2);
+    }
+    return str;
+};
+
+const defaultImport = (exports)=>{
+    if(exports && exports['.']){
+        if(Array.isArray(exports['.'])){
+            if(exports['.'][0] && exports['.'][0].import) return exports['.'][0].import;
+        }
+        if(exports['.'] && exports['.'].import){
+            if(typeof exports['.'].import === 'string'){
+                return exports['.'].import;
             }
-            const entryLocation = path.join(
-                location,
-                (packageInfo.module || packageInfo.main || 'index.js')
-            );
-            result = entryLocation;
+            if(typeof exports['.'].import.default === 'string'){
+                return exports['.'].import.default;
+            }
         }
     }
-    return result;
+    if(exports && exports.import) return exports.import;
+    if(!exports) return 'index.js';
 };
 
-export const createImportMap = async (deps, endpoints)=>{
-    const keys = Object.keys(deps);
-    const keyMap = {};
-    for(let lcv=0; lcv < keys.length; lcv++){
-        keyMap[keys[lcv]] = await getURLFrom(keys[lcv], endpoints);
+const pathFromPackage = (pkg)=>{
+    const result = (pkg.type === 'module')?
+        (pkg.exports?defaultImport(pkg.exports):pkg.main):
+        (pkg.exports?defaultImport(pkg.exports):(
+            pkg.module || //is a modules
+            pkg.main  || //fallback to whatever is in main (prolly cjs)
+            'index.js' // fallback to the original default on the assumption
+            // 
+        ));
+    return notRelative(result);
+};
+
+const mochaEventHandler = (type, event)=>{
+    try{
+        if(type.message && type.stack){
+            //it's an error
+        }else{
+            switch(type){
+                case 'pass':
+                    if(waiting[event.title]){
+                        const handle = waiting[event.title];
+                        delete waiting[event.title];
+                        handle.resolve();
+                    }else{
+                        console.log('unknown event', type, event);
+                    }
+                    break;
+                case 'fail':
+                    if(waiting[event.title]){
+                        const handle = waiting[event.title];
+                        delete waiting[event.title];
+                        const error = new Error();
+                        error.message = event.err;
+                        error.stack = event.stack;
+                        error.target = event;
+                        handle.reject(error);
+                    }else{
+                        console.log('unknown event', type, event);
+                    }
+                    break;
+                case 'start':
+                case 'end':
+            }
+        }
+    }catch(ex){
+        console.log('::', ex);
     }
-    return keyMap;
 };
 
-export const createImportMapForPackage = async (packageLocation, parts=['dependencies'], imports)=>{
-    ensureRequire();
-    //const packageData = internalRequire(packageLocation);
-    const packageData = await scanPackage({
-        package: packageLocation,
-        includeDeps: true,
-        strict: false
+export class ImportExport{
+    constructor(options={}){
+        this.logger = options.logger || Logger.defaultLogger;
+    }
+    
+    async createImportMapForPackage(packageLocation, parts=['dependencies'], imports, roots={}){
+        const rootNames = Object.keys(roots);
+        const result = await traverse(packageLocation, async (pkg, state, entry)=>{
+            const context = {
+                name: pkg.name,
+                version: pkg.version,
+                path: pathFromPackage(pkg)
+            };
+            if(roots[rootNames[0]]){
+                //todo: maybe cache these over the traversal?
+                state.modules[pkg.name] = template(roots[rootNames[0]], context);
+            }
+            if(rootNames.length === 0){
+                state.modules[pkg.name] = template('node_modules/${name}/${path}', context);
+            }
+            if(pkg.name === '@open-automaton/traverse-dependencies'){
+                return {
+                    ...(pkg.dependencies || {}),
+                    ...(pkg.devDependencies || {}),
+                    ...(pkg.peerDependencies || {})
+                };
+            }else{
+                return {
+                    ...(pkg.dependencies || {}),
+                    ...(pkg.peerDependencies || {})
+                };
+            }
+        });
+        return result.modules;
+    }
+    
+    async replaceImportMap(html, incoming){
+        const mapStr = typeof incoming === 'string'?incoming:JSON.stringify(incoming);
+        const matches = html.match(
+            /< *[Ss][Cc][Rr][Ii][Pp][Tt] +[Tt][Yy][Pp][Ee] *= *["']importmap["'](.|\n)*?<\/[Ss][Cc][Rr][Ii][Pp][Tt]>/m
+        );
+        if(matches && matches[0]){
+            const result = html.replace(matches[0], (`<script type="importmap">
+    {
+        "imports": ${mapStr.replace(/\n/g, '\n        ')}
+    }
+    </script>`).replace(/\n/g, '\n    '));
+            return result;
+        }else{
+            return html;
+        }
+    }
+    
+    async rewriteHTML(filename, pkg, flushToFile){
+        //const parts = rootJSONLocation.split('/');
+        //parts.pop(); //package.json
+        //let pkg = parts.pop();
+        //if(parts[parts.length-1][0] === '@') pkg = `${parts.pop()}/${pkg}`;
+        const body = (await fs.promises.readFile(filename)).toString();
+        const matches = body.match(
+            /< *[Ss][Cc][Rr][Ii][Pp][Tt] +[Tt][Yy][Pp][Ee] *= *["']importmap["'](.|\n)*?<\/[Ss][Cc][Rr][Ii][Pp][Tt]>/m
+        );
+        if(matches && matches[0]){
+            const map = await this.createImportMapForPackage(pkg);
+            const result = body.replace(matches[0], (`<script type="importmap">
+    {
+        "imports": ${JSON.stringify(map, null, '    ').replace(/\n/g, '\n        ')}
+    }
+    </script>`).replace(/\n/g, '\n    '));
+            if(flushToFile){
+                await fs.promises.writeFile(filename, result);
+            }
+            return result;
+        }
+    }
+    
+    universalResolve(name){
+        let resolution = null;
+        if(isBrowser || isJsDom){
+            resolution = `/node_modules/${name}`;
+        }else{
+            if(!internalRequire) ensureRequire();
+            resolution = internalRequire.resolve(`${name}`);
+        }
+        if(this.logger) this.logger.log(`RESOLVE ${name} -> ${resolution}`, Logger.INFO);
+        return resolution;
+    }
+    
+    async scanPackage(options={}){
+        let pack = null;
+        const result = await traverse.unrolled('.', (name)=>{
+            return this.universalResolve(name);
+        }, (pkg, state, entry)=>{
+            this.logger.log(`scanning ${pkg.name}`, Logger.INFO);
+            if(!state.modules) state.modules = {};
+            state.modules[pkg.name] = entry.module;
+            const deps = options.includeDeps?(pkg.dependencies || {}):{};
+            const devDeps = options.includeDeps?(pkg.devDependencies || {}):{};
+            const peerDeps = options.includeDeps?(pkg.peerDependencies || {}):{};
+            if(pkg.name === options.package){
+                pack = pkg;
+                const config = pkg.moka || options.config || {};
+                if(options.includeRemotes){
+                    if((!pkg.moka) && options.strict !== false ) throw new Error('.moka entry not found in package!');
+                    Object.keys(config).forEach((key)=>{
+                        if(
+                            key === 'stub' || 
+                            key === 'stubs' || 
+                            key === 'require' || 
+                            key === 'shims' || 
+                            key === 'global-shims'
+                        ) return;
+                        const data = pkg.moka[key];
+                        const options = data.options || {};
+                        options.onConsole = (...args)=>{
+                            let parsedArgs = null;
+                            if(
+                                typeof args[0] === 'string' &&
+                                args[0][0] === '[' && 
+                                ( parsedArgs = JSON.parse(args[0]) ) && 
+                                Array.isArray(parsedArgs) && 
+                                typeof parsedArgs[0] === 'string'
+                            ){
+                                //assume this is json-stream reporter output
+                                mochaEventHandler(...parsedArgs);
+                            }else{
+                                console.log(...args);
+                            }
+                        };
+                        options.onError = (event)=>{
+                            mochaEventHandler(event);
+                        };
+                        registerRemote(key, data.engine, options);
+                    });
+                }
+                if(config && config.stub && config.stubs){
+                    config.stubs.forEach((stub)=>{
+                        state.modules[stub] = (options.prefix||'') + config.stub;
+                    });
+                }
+                if(config && config.shims){
+                    Object.keys(config.shims).forEach((shim)=>{
+                        state.modules[shim] = (options.prefix||'') + config.shims[shim];
+                    });
+                } 
+            }
+            if(pkg.name === options.package){
+                return { ...deps, ...devDeps, ...peerDeps };
+            }else{
+                return { ...deps, ...peerDeps };
+            }
+        });
+        const errorReturns = errors(result);
+        for(let lcv=0; lcv < errorReturns.names.length; lcv++){
+            this.logger.log(`Failed to import module: ${errorReturns.names[lcv]}`, Logger.INFO);
+            this.logger.log(
+                errorReturns.errors[lcv].stack.toString().replace('Error:', 'Warning:'),
+                Logger.INFO
+            );
+            
+        }
+        const modKeys = Object.keys(result.modules);
+        const modules = {};
+        let module = null;
+        for(let lcv=0; lcv<modKeys.length; lcv++ ){
+            module = result.modules[modKeys[lcv]];
+            if(module[module.length-1] !== '/'){
+                modules[modKeys[lcv]] = module;
+            }
+        } 
+        return {modules, pkg: pack};
+    }
+    
+}
+/*
+export const createImportMapForPackage = async (packageLocation, parts=['dependencies'], imports, roots={})=>{
+    const rootNames = Object.keys(roots);
+    const result = await traverse(packageLocation, async (pkg, state, entry)=>{
+        const context = {
+            name: pkg.name,
+            version: pkg.version,
+            path: pathFromPackage(pkg)
+        };
+        if(roots[rootNames[0]]){
+            //todo: maybe cache these over the traversal?
+            state.modules[pkg.name] = template(roots[rootNames[0]], context);
+        }
+        if(rootNames.length === 0){
+            state.modules[pkg.name] = template('node_modules/${name}/${path}', context);
+        }
+        if(pkg.name === '@open-automaton/traverse-dependencies'){
+            return {
+                ...(pkg.dependencies || {}),
+                ...(pkg.devDependencies || {}),
+                ...(pkg.peerDependencies || {})
+            };
+        }else{
+            return {
+                ...(pkg.dependencies || {}),
+                ...(pkg.peerDependencies || {})
+            };
+        }
     });
-    let map = { ...packageData.modules };
-    /*parts.forEach((part)=>{
-        map = {...map, ...(packageData[part] || {})}
-    });*/
-    //ensureRequire();
-    const config = imports?internalRequire(path.join('..', imports)):{ 'local' : '/node_modules/${name}/'};
-    return createImportMap(map, config);
+    return result.modules;
 };
 
-export const replaceImportMap = async (html, incoming)=>{
+/*export const replaceImportMap = async (html, incoming)=>{
     const mapStr = typeof incoming === 'string'?incoming:JSON.stringify(incoming);
     const matches = html.match(
         /< *[Ss][Cc][Rr][Ii][Pp][Tt] +[Tt][Yy][Pp][Ee] *= *["']importmap["'](.|\n)*?<\/[Ss][Cc][Rr][Ii][Pp][Tt]>/m
@@ -103,6 +325,10 @@ export const replaceImportMap = async (html, incoming)=>{
 };
 
 export const rewriteHTML = async (filename, pkg, flushToFile)=>{
+    //const parts = rootJSONLocation.split('/');
+    //parts.pop(); //package.json
+    //let pkg = parts.pop();
+    //if(parts[parts.length-1][0] === '@') pkg = `${parts.pop()}/${pkg}`;
     const body = (await fs.promises.readFile(filename)).toString();
     const matches = body.match(
         /< *[Ss][Cc][Rr][Ii][Pp][Tt] +[Tt][Yy][Pp][Ee] *= *["']importmap["'](.|\n)*?<\/[Ss][Cc][Rr][Ii][Pp][Tt]>/m
@@ -115,7 +341,7 @@ export const rewriteHTML = async (filename, pkg, flushToFile)=>{
 }
 </script>`).replace(/\n/g, '\n    '));
         if(flushToFile){
-            fs.promises.writeFile(filename, result);
+            await fs.promises.writeFile(filename, result);
         }
         return result;
     }
@@ -131,13 +357,13 @@ export const registerRequire = (rqr, rslv)=>{
     //require = rqr;
     //resolve = rslv;
 };
-//*
+
 export const registerRemote = (name, engineName, options={})=>{
     if(!remoteRequire) remoteRequire = mod.createRequire(import.meta.url);
     if(!engines[engineName]) engines[engineName] = remoteRequire(engineName);
     const instance = new engines[engineName](options);
     remotes[name] = instance;
-}; //*/
+}; 
 
 export const mochaEventHandler = (type, event)=>{
     try{
@@ -177,99 +403,77 @@ export const mochaEventHandler = (type, event)=>{
 };
 
 export const scanPackage = async(options={})=>{
-    const includeRemotes = options.includeRemotes;
-    let includeDeps = options.includeDeps;
-    if(includeDeps === null || includeDeps === undefined) includeDeps = true;
-    const pkg = await getPackage(options.package);
-    const config = pkg.moka || options.config || {};
-    if(!pkg) throw new Error('could not load '+path.join(process.cwd(), 'package.json'));
-    const dependencies = Object.keys(pkg.dependencies || []);
-    const devDependencies = Object.keys(pkg.devDependencies || []);
-    const seen = {};
-    const mains = {};
-    const modules = {};
-    const locations = {};
-    if(!options.prefix) options.prefix = './';
-    const list = dependencies.slice(0).concat(devDependencies.slice(0));
-    let moduleName = null;
-    let subpkg = null;
-    let location = null;
-    if(config && config.stub && config.stubs){
-        config.stubs.forEach((stub)=>{
-            modules[stub] = options.prefix + pkg.moka.stub;
-        });
-    }
-    if(includeDeps){
-        while(list.length){
-            moduleName = list.shift();
-            try{
-                ensureRequire();
-                if(modules[moduleName]) continue;
-                let thisPath = null;
-                thisPath = internalRequire.resolve(moduleName);
-                const parts = thisPath.split(`/${moduleName}/`);
-                parts.pop();
-                const localPath = parts.join(`/${moduleName}/`) + `/${moduleName}/`;
-                subpkg = await getPackage(localPath);
-                if(!subpkg) throw new Error(`Could not find ${localPath}`);
-                mains[moduleName] = getCommonJS(subpkg, {}, options);
-                seen[moduleName] = true;
-                locations[moduleName] = location;
-                modules[moduleName] = getModule(subpkg, {}, options);
-                Object.keys(subpkg.dependencies || {}).forEach((dep)=>{
-                    if(list.indexOf(dep) === -1 && !seen[dep]){
-                        list.push(dep);
-                    }
+    let pack = null;
+    const result = await traverse.unrolled('.', (name)=>{
+        return `node_modules/${name}`;
+    }, (pkg, state, entry)=>{
+        if(!state.modules) state.modules = {};
+        state.modules[pkg.name] = entry.module;
+        const deps = options.includeDeps?(pkg.dependencies || {}):{};
+        const devDeps = options.includeDeps?(pkg.devDependencies || {}):{};
+        const peerDeps = options.includeDeps?(pkg.peerDependencies || {}):{};
+        if(pkg.name === options.package){
+            pack = pkg;
+            const config = pkg.moka || options.config || {};
+            if(options.includeRemotes){
+                if((!pkg.moka) && options.strict !== false ) throw new Error('.moka entry not found in package!');
+                Object.keys(config).forEach((key)=>{
+                    if(
+                        key === 'stub' || 
+                        key === 'stubs' || 
+                        key === 'require' || 
+                        key === 'shims' || 
+                        key === 'global-shims'
+                    ) return;
+                    const data = pkg.moka[key];
+                    const options = data.options || {};
+                    options.onConsole = (...args)=>{
+                        let parsedArgs = null;
+                        if(
+                            typeof args[0] === 'string' &&
+                            args[0][0] === '[' && 
+                            ( parsedArgs = JSON.parse(args[0]) ) && 
+                            Array.isArray(parsedArgs) && 
+                            typeof parsedArgs[0] === 'string'
+                        ){
+                            //assume this is json-stream reporter output
+                            mochaEventHandler(...parsedArgs);
+                        }else{
+                            console.log(...args);
+                        }
+                    };
+                    options.onError = (event)=>{
+                        mochaEventHandler(event);
+                    };
+                    registerRemote(key, data.engine, options);
                 });
-            }catch(ex){
-                if(options.verbose)  
-                    console.log('FAILED', moduleName, ex);
             }
+            if(config && config.stub && config.stubs){
+                config.stubs.forEach((stub)=>{
+                    state.modules[stub] = (options.prefix||'') + config.stub;
+                });
+            }
+            if(config && config.shims){
+                Object.keys(config.shims).forEach((shim)=>{
+                    state.modules[shim] = (options.prefix||'') + config.shims[shim];
+                });
+            } 
         }
-    }
-    if(includeRemotes){
-        if((!pkg.moka) && options.strict !== false ) throw new Error('.moka entry not found in package!');
-        const config = pkg.moka || options.config || {};
-        Object.keys(config).forEach((key)=>{
-            if(
-                key === 'stub' || 
-                key === 'stubs' || 
-                key === 'require' || 
-                key === 'shims' || 
-                key === 'global-shims'
-            ) return;
-            const data = pkg.moka[key];
-            const options = data.options || {};
-            options.onConsole = (...args)=>{
-                let parsedArgs = null;
-                if(
-                    typeof args[0] === 'string' &&
-                    args[0][0] === '[' && 
-                    ( parsedArgs = JSON.parse(args[0]) ) && 
-                    Array.isArray(parsedArgs) && 
-                    typeof parsedArgs[0] === 'string'
-                ){
-                    //assume this is json-stream reporter output
-                    mochaEventHandler(...parsedArgs);
-                }else{
-                    console.log(...args);
-                }
-            };
-            options.onError = (event)=>{
-                mochaEventHandler(event);
-            };
-            registerRemote(key, data.engine, options);
-        });
-    }
-    if(config && config.stub && config.stubs){
-        config.stubs.forEach((stub)=>{
-            modules[stub] = options.prefix + config.stub;
-        });
-    }
-    if(config && config.shims){
-        Object.keys(config.shims).forEach((shim)=>{
-            modules[shim] = options.prefix + config.shims[shim];
-        });
-    }
-    return { modules, pkg };
+        if(pkg.name === options.package){
+            return { ...deps, ...devDeps, ...peerDeps };
+        }else{
+            return { ...deps, ...peerDeps };
+        }
+    });
+    const modKeys = Object.keys(result.modules);
+    const modules = {};
+    let module = null;
+    for(let lcv=0; lcv<modKeys.length; lcv++ ){
+        module = result.modules[modKeys[lcv]]
+        if(module[module.length-1] !== '/'){
+            modules[modKeys[lcv]] = module;
+        }
+    } 
+    return {modules, pkg: pack};
 };
+//*/

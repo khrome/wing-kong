@@ -1,8 +1,7 @@
 /* global describe:false */
 import { chai } from '@environment-safe/chai';
 import { it } from '@open-automaton/moka';
-//import { intercept } from '@environment-safe/console-intercept'; 
-import { replaceImportMap, rewriteHTML } from '../src/index.mjs';
+import { ImportExport } from '../src/index.mjs';
 const should = chai.should();
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
@@ -12,17 +11,27 @@ import * as mod from 'module';
 let internalRequire = null;
 if(typeof require !== 'undefined') internalRequire = require;
 const ensureRequire = ()=> (!internalRequire) && (internalRequire = mod.createRequire(import.meta.url));
+import { Logger } from '@environment-safe/logger';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
-const resolvedDepsJSONString = `
-                "@environment-safe/chai": "/node_modules/@environment-safe/chai/src/index.mjs",
-                "@environment-safe/console-intercept": "/node_modules/@environment-safe/console-intercept/index.js",
-                "@environment-safe/package": "/node_modules/@environment-safe/package/src/index.mjs",
-                "@open-automaton/moka": "/node_modules/@open-automaton/moka/index.js",
-                "babel-plugin-transform-import-meta": "/node_modules/babel-plugin-transform-import-meta/index.js",
-                "es6-template-strings": "/node_modules/es6-template-strings/index.js",
-                "yargs": "/node_modules/yargs/index.mjs"`;
+const logger = new Logger({ level: 0 });
+//logger.registerChannel(makeConsoleChannel(console));
+
+const resolvedDepsLines = [
+    '"wing-kong": "node_modules/wing-kong/src/index.mjs"',
+    '"@environment-safe/chai": "node_modules/@environment-safe/chai/src/index.mjs"',
+    '"@environment-safe/file": "node_modules/@environment-safe/file/src/index.mjs"',
+    '"@environment-safe/package": "node_modules/@environment-safe/package/src/index.mjs"',
+    '"@open-automaton/moka": "node_modules/@open-automaton/moka/src/index.mjs"',
+    '"@open-automaton/traverse-dependencies": "node_modules/@open-automaton/traverse-dependencies/src/index.mjs"',   
+];
+
+const containsresolvedDeps = (html)=>{
+    for(let lcv=0; lcv < resolvedDepsLines.length;lcv++){
+        html.should.contain(resolvedDepsLines[lcv]);
+    }
+};
 
 const executeCommand = async (command)=>{
     return new Promise((resolve, reject)=>{
@@ -58,13 +67,14 @@ describe('wing-kong', ()=>{
         it('generates a map on the commandline', async ()=>{
             let data = null;
             try{
-                const result = await executeCommand([
+                const command = [
                     './bin/wing-kong.mjs', 
                     '-i', 
                     './test/demo/test.json', 
                     'generate', 
                     'dependencies'
-                ]);
+                ];
+                const result = await executeCommand(command);
                 try{
                     should.exist(result);
                     data = JSON.parse(result);
@@ -76,14 +86,14 @@ describe('wing-kong', ()=>{
                 should.not.exist(ex);
             }
             should.exist(data['es6-template-strings']);
-            data['es6-template-strings'].should.equal('https:/unpkg.com/es6-template-strings/index.js');
+            data['es6-template-strings'].should.equal('https://unpkg.com/es6-template-strings@2.0.1/index.js');
             should.exist(data['yargs']);
-            data['yargs'].should.equal('https:/unpkg.com/yargs/index.mjs');
+            data['yargs'].should.equal('https://unpkg.com/yargs@17.7.2/index.mjs');
         });
-        
         it('replaces html importmap', async ()=>{
+            const wingKong = new ImportExport({ logger });
             try{
-                const result = await executeCommand([
+                const command = [
                     './bin/wing-kong.mjs', 
                     '-i', 
                     '.import-config.json',
@@ -91,7 +101,8 @@ describe('wing-kong', ()=>{
                     './test/test.html', 
                     'rewrite', 
                     'dependencies'
-                ]);
+                ];
+                const result = await executeCommand(command);
                 (result === '').should.equal(true);
             }catch(ex){
                 console.log(ex);
@@ -101,7 +112,7 @@ describe('wing-kong', ()=>{
             await new Promise((resolve, reject)=>{
                 fs.readFile('./test/test.html', (err, body)=>{
                     const html = body.toString();
-                    html.should.contain(resolvedDepsJSONString);
+                    containsresolvedDeps(html);
                     resolve(html);
                 });
             });
@@ -110,7 +121,7 @@ describe('wing-kong', ()=>{
                 fs.readFile('./test/test.html', async (err, body)=>{
                     try{
                         const html = body.toString();
-                        const fixed = await replaceImportMap(html, {});
+                        const fixed = await wingKong.replaceImportMap(html, {});
                         fs.writeFile('./test/test.html', fixed, (err)=>{
                             should.not.exist(err);
                             resolve();
@@ -121,21 +132,20 @@ describe('wing-kong', ()=>{
                 });
             });
         });
-        
         it('substitutes in html', async ()=>{
+            const wingKong = new ImportExport({ logger });
             try{
                 ensureRequire();
-                const html = await rewriteHTML(
+                const html = await wingKong.rewriteHTML(
                     path.join(__dirname, 'test.html'), 
                     internalRequire.resolve('../package.json')
                 );
-                html.should.contain(resolvedDepsJSONString);
+                containsresolvedDeps(html);
             }catch(ex){
                 console.log(ex);
                 should.not.exist(ex);
             }
         });
-        
         
     });
 });

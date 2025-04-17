@@ -1,7 +1,92 @@
 {
     "name": "wing-kong",
-    "version": "1.1.0",
-    "main": "wing-kong.js",
+    "version": "2.0.0",
+    "type": "module",
+    "main": "src/index.mjs",
+    "module": "src/index.mjs",
+    "commonjs": "dist/index.cjs",
+    "exports": {
+        ".": {
+            "import": "./src/index.mjs",
+            "require": "./dist/index.cjs"
+        },
+        "./package.json": {
+            "import": "./package.json",
+            "require": "./package.json"
+        },
+        "./src/index.mjs": {
+            "import": "./src/index.mjs",
+            "require": "./dist/index.cjs"
+        },
+        "./dist/index.cjs": {
+            "import": "./src/index.mjs",
+            "require": "./dist/index.cjs"
+        }
+    },
+    "bin": {
+        "wing-kong": "./bin/wing-kong.mjs"
+    },
+    "moka": {
+        "firefox": {
+            "engine": "@open-automaton/playwright-mining-engine",
+            "options": {
+                "type": "firefox"
+            }
+        },
+        "chrome": {
+            "engine": "@open-automaton/playwright-mining-engine",
+            "options": {
+                "type": "chromium"
+            }
+        },
+        "safari": {
+            "engine": "@open-automaton/playwright-mining-engine",
+            "options": {
+                "type": "webkit"
+            }
+        },
+        "stub": "node_modules/@open-automaton/moka/src/stub.mjs",
+        "stubs": [
+            "express",
+            "module",
+            "path",
+            "fs",
+            "os",
+            "node:module",
+            "node:path",
+            "node:fs",
+            "@babel/cli",
+            "@babel"
+        ],
+        "shims": {
+            "browser-or-node": "node_modules/browser-or-node/src/index.js",
+            "sift": "node_modules/sift/es5m/index.js",
+            "chai": "node_modules/chai/chai.js",
+            "@environment-safe/logger": "node_modules/@environment-safe/logger/src/index.mjs",
+            "@environment-safe/tag-parser": "node_modules/@environment-safe/tag-parser/src/index.mjs",
+            "@environment-safe/tag-parser/template": "node_modules/@environment-safe/tag-parser/src/template.mjs"
+        }
+    },
+    "scripts": {
+        "lint": "eslint src/*.mjs test/*.mjs",
+        "bin-test": "./node_modules/.bin/mocha test/test-bin.mjs",
+        "bin": "./bin/wing-kong.mjs",
+        "build-commonjs": "./node_modules/.bin/babel src --out-dir dist --out-file-extension .cjs",
+        "build-commonjs-test": "./node_modules/.bin/babel test --out-dir test --out-file-extension .cjs",
+        "import-test": "moka test/test.mjs",
+        "require-test": "./node_modules/.bin/mocha test/test.cjs",
+        "local-server": "open 'http://localhost:8085/' ; npx http-server -p 8085",
+        "headless-browser-test": "npm run headless-chrome-test; npm run headless-firefox-test; npm run headless-safari-test",
+        "headless-chrome-test": "moka --server . --browser chrome --relaxed --prefix ../ test/test.mjs",
+        "headless-firefox-test": "moka --server . --browser firefox --relaxed --prefix ../ test/test.mjs",
+        "headless-safari-test": "moka --server . --browser safari --relaxed --prefix ../ test/test.mjs",
+        "browser-test": "moka --server . --local-browser --relaxed --prefix ../ test/test.mjs",
+        "container-test": "docker build . -t wing-kong -f ./containers/test.dockerfile; docker logs --follow \"$(docker run -d wing-kong)\"",
+        "generate-docs": "for i in src/*.mjs; do echo \"generating docs for: ${i}\";./node_modules/.bin/jsdoc2md -c .jsdoc.json \"${i}\" > \"docs/$(basename ${i%.mjs}).md\"; done",
+        "generate-types": "for i in src/*.mjs; do echo \"generating types for: ${i}\"; ./node_modules/.bin/jsdoc -t node_modules/tsd-jsdoc/dist -c .jsdoc.json \"${i}\"; mv out/types.d.ts \"src/$(basename ${i%.mjs}).d.ts\"; done; rmdir out",
+        "add-generated-files-to-commit": "git add docs/*.md; git add src/*.d.ts; git add dist/*.cjs",
+        "prepare": "husky install"
+    },
     "devDependencies": {
         "@babel/cli": "^7.22.15",
         "@babel/core": "^7.22.17",
@@ -15,36 +100,17 @@
         "jslint": "^0.12.1",
         "mocha": "^10.2.0"
     },
-    "bin": {
-        "wing-kong": "./bin/wing-kong.mjs"
-    },
-    "scripts": {
-        "lint": "./node_modules/.bin/eslint *.js src/*.mjs test/*.mjs",
-        "bin-test": "./node_modules/.bin/mocha test/test-bin.mjs",
-        "bin": "./bin/wing-kong.mjs",
-        "build-commonjs": "./node_modules/.bin/babel src --out-dir dist --out-file-extension .cjs",
-        "build-commonjs-test": "./node_modules/.bin/babel test --out-dir test --out-file-extension .cjs",
-        "import-test": "./node_modules/.bin/mocha test/test.mjs",
-        "require-test": "./node_modules/.bin/mocha test/test.cjs",
-        "local-server": "open 'http://localhost:8085/' ; npx http-server -p 8085",
-        "headless-browser-test": "npm run headless-chrome-test; npm run headless-firefox-test; npm run headless-safari-test",
-        "headless-chrome-test": "./bin/moka.mjs --server . --browser chrome --relaxed --prefix ../ test/test.mjs",
-        "headless-firefox-test": "./bin/moka.mjs --server . --browser firefox --relaxed --prefix ../ test/test.mjs",
-        "headless-safari-test": "./bin/moka.mjs --server . --browser safari --relaxed --prefix ../ test/test.mjs",
-        "browser-test": "./bin/moka.mjs --server . --local-browser --relaxed --prefix ../ test/test.mjs",
-        "container-test": "docker build . -t wing-kong -f ./containers/test.dockerfile; docker logs --follow \"$(docker run -d wing-kong)\"",
-        "generate-docs": "for i in src/*.mjs; do echo \"generating docs for: ${i}\";./node_modules/.bin/jsdoc2md -c .jsdoc.json \"${i}\" > \"docs/$(basename ${i%.mjs}).md\"; done",
-        "generate-types": "for i in src/*.mjs; do echo \"generating types for: ${i}\"; ./node_modules/.bin/jsdoc -t node_modules/tsd-jsdoc/dist -c .jsdoc.json \"${i}\"; mv out/types.d.ts \"src/$(basename ${i%.mjs}).d.ts\"; done; rmdir out",
-        "add-generated-files-to-commit": "git add docs/*.md; git add src/*.d.ts; git add dist/*.cjs",
-        "prepare": "husky install"
-    },
     "dependencies": {
         "@environment-safe/chai": "^0.2.0",
         "@environment-safe/console-intercept": "^0.1.0",
+        "@environment-safe/event-emitter": "^0.0.1",
+        "@environment-safe/file": "^0.3.2",
+        "@environment-safe/logger": "^0.1.0",
         "@environment-safe/package": "^0.2.0",
+        "@environment-safe/tag-parser": "^1.2.0",
         "@open-automaton/moka": "^0.0.4",
+        "@open-automaton/traverse-dependencies": "^0.0.3",
         "babel-plugin-transform-import-meta": "^2.2.1",
-        "es6-template-strings": "^2.0.1",
         "yargs": "^17.7.2"
     }
 }

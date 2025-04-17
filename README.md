@@ -5,8 +5,16 @@ Because writing importmaps and maintaining them by hand when you're doing native
 
 This makes that simple: pulling dependencies, then rendering importmaps based on your configuration. The basic profile & generate runs client + server, though the CL tools only run server side.
 
-**Waltz in and out like the wind.** (Usage)
--------------------------------------------
+UPDATE: `wing-kong` now supports loading in the browser and additionally building an importmap from a root `package.json` using either your `/node_modules` a CDN or a fusion of multiple sources.
+
+Usage
+-----
+
+> "You think they'd let us walk in and out like the wind?"
+>           -Wang Chi
+
+
+To use it as a build tool within your project:
 
 1) Add it to your project
 
@@ -34,7 +42,7 @@ This makes that simple: pulling dependencies, then rendering importmaps based on
         {
             "unpkg" : "https://unpkg.com/${name}${version}/",
             "jsdeliver" : "https://cdn.jsdelivr.net/npm/${name}${version}/",
-            "local" : "./${name}"
+            "local" : "./node_modules/${name}"
         }
     ```
     
@@ -57,17 +65,50 @@ This makes that simple: pulling dependencies, then rendering importmaps based on
             }
         }
     ```
+    
+Roadmap
+-------
 
-**As two... I said I was coming** (Testing)
--------------------------------------------
-Testing is easy:
+> "Indeed!"
+> -Lo Pan
 
+- [x] - browser config generation
+- [ ] - windows safety (remove unsafe unix to web path conversion)
+- [ ] - support legacy configs
+- [ ]     - `.files`
+- [ ]     - vite compilation of individual deps
+- [ ] - browser: inline generation
+
+Testing
+-------
+
+> "As two... I said I was coming"
+> -Jack Burton
+
+Run the bin tests to test the commandline executable
 ```bash
-npm run test
+npm run bin-test
 ```
 
-To run the same in a container
+Run the es module tests to test the root modules
+```bash
+npm run import-test
+```
+to run the same test inside the browser:
 
+```bash
+npm run browser-test
+```
+to run the same test headless in chrome, firefox and safari:
+```bash
+npm run headless-browser-test
+```
+
+to run the same test inside docker:
 ```bash
 npm run container-test
 ```
+
+Credit
+------
+The Quotes and name are from the ever excellent [Big Trouble in Little China](https://www.youtube.com/watch?v=592EiTD2Hgo) which began life as a sequel script to the equally excellent [Adventures of Buckaroo Banzai](https://www.youtube.com/watch?v=RdanCNK4ayo).
