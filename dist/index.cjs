@@ -198,7 +198,9 @@ class ImportExport {
     }, (pkg, state, entry) => {
       this.logger.log(`scanning ${pkg.name} of ${Object.keys(state.modules).length}`, _logger.Logger.INFO);
       if (!state.modules) state.modules = {};
-      state.modules[pkg.name] = '/' + entry.module.replace(/\/\.\//g, '/');
+      if (!state.modules[pkg.name]) {
+        state.modules[pkg.name] = '/' + entry.module.replace(/\/\.\//g, '/');
+      }
       if (this.logger) this.logger.log(`SCAN> ${pkg.name} -> ${state.modules[pkg.name]}`, _logger.Logger.INFO);
       const deps = options.includeDeps ? pkg.dependencies || {} : {};
       const devDeps = options.includeDeps ? pkg.devDependencies || {} : {};

@@ -206,13 +206,14 @@ export class ImportExport{
     
     async scanPackage(options={}){
         let pack = await getPackage();
+        const prefix = options.prefix || this.options.prefix || '';
         const result = await traverse.unrolled('.', async (name)=>{
             return await this.universalResolve(name);
         }, (pkg, state, entry)=>{
             this.logger.log(`scanning ${pkg.name} of ${Object.keys(state.modules).length}`, Logger.INFO);
             if(!state.modules) state.modules = {};
             if(!state.modules[pkg.name]){
-                state.modules[pkg.name] = '/'+entry.module.replace(/\/\.\//g, '/');
+                state.modules[pkg.name] = prefix+entry.module.replace(/\/\.\//g, '/');
             }
             if(this.logger) this.logger.log(`SCAN> ${pkg.name} -> ${state.modules[pkg.name]}`, Logger.INFO);
             const deps = options.includeDeps?(pkg.dependencies || {}):{};
@@ -259,12 +260,12 @@ export class ImportExport{
                 }
                 if(config && config.stub && config.stubs){
                     config.stubs.forEach((stub)=>{
-                        state.modules[stub] = (options.prefix||'') + config.stub;
+                        state.modules[stub] = prefix + config.stub;
                     });
                 }
                 if(config && config.shims){
                     Object.keys(config.shims).forEach((shim)=>{
-                        state.modules[shim] = (options.prefix||'') + config.shims[shim];
+                        state.modules[shim] = prefix + config.shims[shim];
                     });
                 } 
             }
