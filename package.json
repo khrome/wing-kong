@@ -1,6 +1,6 @@
 {
     "name": "wing-kong",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "type": "module",
     "main": "src/index.mjs",
     "module": "src/index.mjs",
@@ -109,7 +109,7 @@
         "@environment-safe/package": "^0.2.0",
         "@environment-safe/tag-parser": "^1.2.0",
         "@open-automaton/moka": "^0.0.4",
-        "@open-automaton/traverse-dependencies": "^0.0.3",
+        "@open-automaton/traverse-dependencies": "^0.0.4",
         "babel-plugin-transform-import-meta": "^2.2.1",
         "yargs": "^17.7.2"
     }

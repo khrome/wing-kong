@@ -3,12 +3,10 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.ImportExport = void 0;
+exports.registerRemote = exports.ImportExport = void 0;
 var _browserOrNode = require("browser-or-node");
 var mod = _interopRequireWildcard(require("node:module"));
 var fs = _interopRequireWildcard(require("node:fs"));
-var path = _interopRequireWildcard(require("node:path"));
-var _package = require("@environment-safe/package");
 var _traverseDependencies = require("@open-automaton/traverse-dependencies");
 var _template = require("@environment-safe/tag-parser/template");
 var _logger = require("@environment-safe/logger");
@@ -21,20 +19,19 @@ const template = (template, context) => {
 let internalRequire = null;
 if (typeof require !== 'undefined') internalRequire = require;
 const ensureRequire = () => !internalRequire && (internalRequire = mod.createRequire(require('url').pathToFileURL(__filename).toString()));
-const universalResolve = name => {
-  let resolution = null;
-  if (_browserOrNode.isBrowser || _browserOrNode.isJsDom) {
-    resolution = `/node_modules/${name}`;
-  } else {
-    if (!internalRequire) ensureRequire();
-    resolution = internalRequire.resolve(`${name}`);
-  }
-  if (logger) logger.log(`RESOLVE ${name} -> ${resolution}`, _logger.Logger.INFO);
-  return resolution;
+let waiting = {};
+let remoteRequire = null;
+const remotes = {};
+const engines = {};
+const registerRemote = (name, engineName, options = {}) => {
+  if (!remoteRequire) remoteRequire = mod.createRequire(require('url').pathToFileURL(__filename).toString());
+  if (!engines[engineName]) engines[engineName] = remoteRequire(engineName);
+  const instance = new engines[engineName](options);
+  remotes[name] = instance;
 };
 
 //TODO: make the pathing windows friendly (there are places where file path and web locations are crossed)
-
+exports.registerRemote = registerRemote;
 const notRelative = str => {
   if (str && str[0] === '.' && str[1] === '/') {
     return str.substring(2);
@@ -67,6 +64,42 @@ const pathFromPackage = pkg => {
   // 
   ;
   return notRelative(result);
+};
+const mochaEventHandler = (type, event) => {
+  try {
+    if (type.message && type.stack) {
+      //it's an error
+    } else {
+      switch (type) {
+        case 'pass':
+          if (waiting[event.title]) {
+            const handle = waiting[event.title];
+            delete waiting[event.title];
+            handle.resolve();
+          } else {
+            console.log('unknown event', type, event);
+          }
+          break;
+        case 'fail':
+          if (waiting[event.title]) {
+            const handle = waiting[event.title];
+            delete waiting[event.title];
+            const error = new Error();
+            error.message = event.err;
+            error.stack = event.stack;
+            error.target = event;
+            handle.reject(error);
+          } else {
+            console.log('unknown event', type, event);
+          }
+          break;
+        case 'start':
+        case 'end':
+      }
+    }
+  } catch (ex) {
+    console.log('::', ex);
+  }
 };
 class ImportExport {
   constructor(options = {}) {
