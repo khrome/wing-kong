@@ -62,10 +62,6 @@ const defaultImport = (exports)=>{
 };
 
 const pathFromPackage = (pkg)=>{
-    if(pkg.name == 'tslib'){
-        console.log(pkg.name, defaultImport(pkg.exports));
-        process.exit();
-    }
     const result = (pkg.type === 'module')?
         (pkg.exports?defaultImport(pkg.exports):pkg.main):
         (pkg.exports?defaultImport(pkg.exports):(
